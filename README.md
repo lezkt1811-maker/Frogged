@@ -18,4 +18,7 @@ https://lezkt1811-maker.github.io/frogged/
 - +130 for grabbing the gold **13 star** when it appears in a portal
 - +1000 for filling all five portals (the next level gets faster)
 
-All graphics and sounds are generated in code — no outside assets.
+## Add it to your home screen
+Open the game link in your phone browser, then **Share → Add to Home Screen** (iPhone) or **⋮ → Add to Home screen / Install app** (Android). It opens full-screen with its own icon.
+
+All graphics, sound effects and the background music are generated in code — no outside assets.

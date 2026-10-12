@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Glow Crossing</title>
+<meta name="theme-color" content="#05060f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Glow Crossing">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <style>
 :root{--bg:#05060f;--cyan:#22e4ff;--violet:#9b5cff;--magenta:#ff3fd2;--text:#dfe8ff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -11,6 +19,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-famil
 body{display:flex;flex-direction:column;align-items:center;padding:10px 8px 16px;user-select:none;-webkit-user-select:none}
 h1{margin:2px 0 8px;font-size:20px;letter-spacing:5px;color:var(--cyan);text-shadow:0 0 10px var(--cyan),0 0 22px var(--violet)}
 #wrap{width:min(96vw, max(260px, calc((100vh - 220px) * 416 / 456)), 640px)}
+@supports (height:100dvh){#wrap{width:min(96vw, max(260px, calc((100dvh - 220px) * 416 / 456)), 640px)}}
+body{padding-top:max(10px, env(safe-area-inset-top))}
 canvas{width:100%;display:block;border:2px solid var(--violet);border-radius:10px;box-shadow:0 0 20px #9b5cff88;touch-action:none}
 #controls{display:flex;align-items:center;gap:18px;margin-top:12px}
 #pad{display:grid;grid-template-columns:repeat(3,62px);grid-template-rows:repeat(2,54px);gap:8px}
@@ -19,7 +29,8 @@ button:active{background:#22164a;box-shadow:0 0 16px var(--magenta)}
 #pad button{font-size:22px}
 #up{grid-column:2;grid-row:1}#left{grid-column:1;grid-row:2}#down{grid-column:2;grid-row:2}#right{grid-column:3;grid-row:2}
 #side{display:flex;flex-direction:column;gap:8px}
-#side button{width:62px;height:50px;font-size:18px}
+#side button{width:62px;height:50px;font-size:18px;display:flex;align-items:center;justify-content:center}
+#side svg{width:22px;height:22px;fill:var(--text)}
 p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
 </style>
 </head>
@@ -34,7 +45,7 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
     <button id="right" data-dx="1" data-dy="0" aria-label="Right">▶</button>
   </div>
   <div id="side">
-    <button id="pauseBtn" aria-label="Pause">⏸</button>
+    <button id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></button>
     <button id="soundBtn" aria-label="Sound">🔊</button>
   </div>
 </div>
@@ -74,6 +85,7 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
     if (!sound) return;
     try {
       ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
       const t0 = ac.currentTime + delay;
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = type; o.frequency.setValueAtTime(f, t0);
@@ -81,6 +93,24 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
       o.connect(g).connect(ac.destination); o.start(t0); o.stop(t0 + d + 0.02);
     } catch (e) {}
   }
+
+  // original background loop: bass + arpeggio, speeds up a little each level
+  const BASS = [45, 45, 48, 43, 41, 41, 43, 40];
+  const ARP = [69, 72, 76, 72, 67, 71, 74, 71, 65, 69, 72, 69, 64, 67, 71, 67];
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  let nextNote = 0, step = 0;
+  function music() {
+    if (!ac || !sound || state !== 'play') { nextNote = 0; return; }
+    if (nextNote < ac.currentTime) nextNote = ac.currentTime + 0.05;
+    const beat = 0.16 / Math.min(1.6, 1 + (mult - 1) * 0.5);
+    while (nextNote < ac.currentTime + 0.25) {
+      const d = nextNote - ac.currentTime;
+      if (step % 4 === 0) beep(mtof(BASS[(step >> 2) % 8]), beat * 3.5, 'triangle', 0.045, d);
+      beep(mtof(ARP[step % 16]), beat * 0.6, 'square', 0.012, d);
+      step++; nextNote += beat;
+    }
+  }
+  setInterval(music, 60);
 
   // ---------- setup ----------
   function buildLanes() {
@@ -144,6 +174,7 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
   function die(cause) {
     if (state !== 'play') return;
     state = 'dying'; dieT = 1.1; dieCause = cause;
+    try { if (navigator.vibrate) navigator.vibrate(120); } catch (e) {}
     beep(220, 0.25, 'sawtooth', 0.06); beep(110, 0.35, 'sawtooth', 0.06, 0.18);
   }
   function saveHi() { if (score > hi) { hi = score; try { localStorage.setItem('glowcrossing_hi', hi); } catch (e) {} } }
@@ -280,8 +311,13 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
           for (let k = 0; k < o.len; k++) {
             const cx = x + k * T + T / 2, cy = y + T / 2;
             glow('#ff3fd2', 10); ctx.fillStyle = '#3a0d3a'; ctx.strokeStyle = '#ff3fd2'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(cx, cy, 12, 0.35, Math.PI * 2 - 0.1); ctx.lineTo(cx, cy); ctx.closePath(); ctx.fill(); ctx.stroke();
-            noGlow(); ctx.fillStyle = '#ff9be8'; ctx.beginPath(); ctx.arc(cx - 3, cy - 2, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+            noGlow(); ctx.fillStyle = '#ff9be8';
+            for (let q = 0; q < 6; q++) {
+              const a = q * Math.PI / 3 + clock * 0.6;
+              ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * 5, cy + Math.sin(a) * 5, 3.2, 1.8, a, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(cx, cy, 2.2, 0, Math.PI * 2); ctx.fill();
           }
           ctx.globalAlpha = 1; ctx.lineWidth = 1;
         }
@@ -357,7 +393,7 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
       overlay([['GAME OVER', 30, '#ff3fd2'], ['Score ' + score, 18, '#22e4ff'],
         [score >= hi && score > 0 ? 'NEW HIGH SCORE!' : 'High ' + hi, 14, '#ffd23f'], ['Tap to play again', 14, '#dfe8ff']]);
     } else if (state === 'paused') {
-      overlay([['PAUSED', 28, '#9b5cff'], ['Press P or ⏸ to resume', 13, '#dfe8ff']]);
+      overlay([['PAUSED', 28, '#9b5cff'], ['Press P or ▶ to resume', 13, '#dfe8ff']]);
     } else if (state === 'dying') {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = 'bold 16px system-ui';
       glow('#ff3fd2', 10); ctx.fillStyle = '#ffffff'; ctx.fillText(dieCause, W / 2, 6.5 * T); noGlow();
@@ -373,7 +409,11 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
   function togglePause() {
     if (state === 'play') state = 'paused';
     else if (state === 'paused') state = 'play';
+    pauseIcon();
   }
+  const PAUSE_SVG = '<svg viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>';
+  const PLAY_SVG = '<svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>';
+  function pauseIcon() { const b = document.getElementById('pauseBtn'); if (b) b.innerHTML = state === 'paused' ? PLAY_SVG : PAUSE_SVG; }
   const KEYS = { ArrowUp: [0, -1], w: [0, -1], W: [0, -1], ArrowDown: [0, 1], s: [0, 1], S: [0, 1],
     ArrowLeft: [-1, 0], a: [-1, 0], A: [-1, 0], ArrowRight: [1, 0], d: [1, 0], D: [1, 0] };
   addEventListener('keydown', e => {
@@ -398,7 +438,7 @@ p.help{margin:10px 0 0;font-size:12px;opacity:.65;text-align:center}
   document.getElementById('pauseBtn').addEventListener('pointerdown', e => { e.preventDefault(); togglePause(); });
   const sb = document.getElementById('soundBtn');
   sb.addEventListener('pointerdown', e => { e.preventDefault(); sound = !sound; sb.textContent = sound ? '🔊' : '🔇'; });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') state = 'paused'; });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') { state = 'paused'; pauseIcon(); } });
 
   // ---------- loop ----------
   buildLanes();
